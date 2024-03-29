@@ -40,7 +40,8 @@ def dump_meteorlogical_NBDC_data(station):
 
     try:
         data = read_csv(url, sep='\s+')
-        with open('./test.json', 'w') as f:
+        file_name = './RAW_meteor_data_{}.json'.format(station)
+        with open(file_name, 'w') as f:
             dump(data.iloc[1:, :].to_dict(orient='records'), f)
         print('Success: Meteorlogical data dump')
 
@@ -67,6 +68,12 @@ def initialize_meteorlogical_thread(station_list):
     :params:
         station_list -- List[str], list of strings representing buoy numbers.
     """
+
+    # !!!!! THIS COULD BE A PROBLEM AREA !!!! #
+    # Will need to figure out how to handle the data dump from multiple stations. 
+    # Maybe a new file for each available station? 
+
+
     for station in station_list:
         # Create the thread targeting the ping_station function
         station_thread = Thread(target=ping_station, args=(station, ))  # args expects tuple
