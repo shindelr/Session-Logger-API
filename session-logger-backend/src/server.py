@@ -1,15 +1,21 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-from time import sleep
-from pandas import read_csv
-from json import dump
+"""
+TODO: Module docstring
+"""
+
 from threading import Thread
+from json import dump
+from time import sleep
+from flask_cors import CORS
+from flask import Flask, request, jsonify
+from pandas import read_csv
+
+from errors import CustFlaskException
 
 
 # APP SETUP
 app = Flask(__name__)
 CORS(app)
-port_num = 5001
+PORT_NUM = 5001
 
 
 # ROUTES
@@ -30,23 +36,23 @@ def session_form_submission():
 
 # UTILITIES
 
-def dump_meteorlogical_NBDC_data(station):
+def dump_buoy_data(station):
     """
     Retrieve the most recent meteorlogical data from NDBC station 46050.
     :params:
         station -- str representing buoy station number.
     """
-    url = 'https://www.ndbc.noaa.gov/data/realtime2/{}.txt'.format(station)
+    url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
 
     try:
-        data = read_csv(url, sep='\s+')
-        file_name = './RAW_meteor_data_{}.json'.format(station)
-        with open(file_name, 'w') as f:
+        data = read_csv(url, sep=r'\s+')
+        file_name = f'./RAW_meteor_data_{station}.json'
+        with open(file_name, 'w', encoding='utf-8-sig') as f:
             dump(data.iloc[1:, :].to_dict(orient='records'), f)
         print('Success: Meteorlogical data dump')
 
     except Exception as e:
-        print('Failure: Meteorlogical data, ' + str(e))
+        raise CustFlaskException('Unable to locate data.', status_code=404) from e
 
 
 def ping_station(station):
@@ -57,7 +63,7 @@ def ping_station(station):
     """
     while True:
         print('Fetching meteorlogical data now.')
-        dump_meteorlogical_NBDC_data(station)
+        dump_buoy_data(station)
         sleep(3600)
 
 
@@ -70,8 +76,8 @@ def initialize_meteorlogical_thread(station_list):
     """
 
     # !!!!! THIS COULD BE A PROBLEM AREA !!!! #
-    # Will need to figure out how to handle the data dump from multiple stations. 
-    # Maybe a new file for each available station? 
+    # Will need to figure out how to handle the data dump from multiple stations.
+    # Maybe a new file for each available station?
 
 
     for station in station_list:
@@ -83,9 +89,19 @@ def initialize_meteorlogical_thread(station_list):
         station_thread.start()
 
 
-if __name__ == '__main__': 
+# ERROR REGISTERS
+
+@app.errorhandler(CustFlaskException)
+def handle_bad_file(error):
+    """TODO: Docstring"""
+    response = jsonify(error.to_dict())  # Might be a problem here
+    response.status_code = error.status_code
+    return response
+
+
+if __name__ == '__main__':
     available_stations = ['46050']
     initialize_meteorlogical_thread(available_stations)
 
-    app.run(debug=True, port=port_num)
-    print(f'Running on port {port_num}')
+    app.run(debug=True, port=PORT_NUM)
+    print(f'Running on port {PORT_NUM}')
