@@ -1,7 +1,10 @@
 """
-TODO: Module docstring
+Main logic to run the Session Logger's backend. Routes/handles things like 
+pinging NDBC for data, form submission from the frontend, communication to and
+from the database, and data processing.
 """
 
+# Third party imports
 from threading import Thread
 from json import dump
 from time import sleep
@@ -9,6 +12,7 @@ from flask_cors import CORS
 from flask import Flask, request, jsonify
 from pandas import read_csv
 
+# Robin made imports
 from errors import CustFlaskException
 
 
@@ -46,10 +50,10 @@ def dump_buoy_data(station):
 
     try:
         data = read_csv(url, sep=r'\s+')
-        file_name = f'./RAW_meteor_data_{station}.json'
+        file_name = f'Session-Logger/session-logger-backend/data/RAW_meteor_data_{station}.json'
         with open(file_name, 'w', encoding='utf-8-sig') as f:
             dump(data.iloc[1:, :].to_dict(orient='records'), f)
-        print('Success: Meteorlogical data dump')
+            print('Success: Meteorlogical data dump')
 
     except Exception as e:
         raise CustFlaskException('Unable to locate data.', status_code=404) from e
@@ -64,7 +68,7 @@ def ping_station(station):
     while True:
         print('Fetching meteorlogical data now.')
         dump_buoy_data(station)
-        sleep(3600)
+        sleep(3600)  # Once an hour
 
 
 def initialize_meteorlogical_thread(station_list):
@@ -75,10 +79,9 @@ def initialize_meteorlogical_thread(station_list):
         station_list -- List[str], list of strings representing buoy numbers.
     """
 
-    # !!!!! THIS COULD BE A PROBLEM AREA !!!! #
+    # !!!!! THIS COULD BE A PROBLEM AREA !!!!
     # Will need to figure out how to handle the data dump from multiple stations.
     # Maybe a new file for each available station?
-
 
     for station in station_list:
         # Create the thread targeting the ping_station function
@@ -90,10 +93,9 @@ def initialize_meteorlogical_thread(station_list):
 
 
 # ERROR REGISTERS
-
 @app.errorhandler(CustFlaskException)
 def handle_bad_file(error):
-    """TODO: Docstring"""
+    """A custom Flask error handler used to log an error opening a file."""
     response = jsonify(error.to_dict())  # Might be a problem here
     response.status_code = error.status_code
     return response

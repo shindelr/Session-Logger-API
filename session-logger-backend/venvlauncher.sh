@@ -1,3 +1,3 @@
 #!/bin/zsh
 echo 'Activating virtual environment.'
-source ../../surfappvenv/bin/activate
+source ~/CodeUtils/VariousVenvs/surfappvenv/bin/activate
