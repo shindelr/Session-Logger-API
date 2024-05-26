@@ -6,11 +6,10 @@ from the database, and data processing.
 
 # Third party imports
 from threading import Thread
-from json import dump
 from time import sleep
+from os import system
 from flask_cors import CORS
 from flask import Flask, request, jsonify
-from pandas import read_csv
 
 # Robin made imports
 from errors import CustFlaskException
@@ -40,26 +39,52 @@ def session_form_submission():
 
 # UTILITIES
 
-def dump_buoy_data(station):
+def dump_full_meteor_data(station: str) -> None:
     """
-    Retrieve the most recent meteorlogical data from NDBC station 46050.
+    Retrieve the most recent meteorlogical data from NDBC station. Full
+    on meteorlogical data is retrieved from the station by using the .txt 
+    extension. Currently only supports 25 hours worth of data dumped at a time.
+    Uses wget via the OS to download the file and deposit it in CSV format into
+    the specified file.
     :params:
         station -- str representing buoy station number.
     """
-    url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
 
     try:
-        data = read_csv(url, sep=r'\s+')
-        file_name = f'Session-Logger/session-logger-backend/data/RAW_meteor_data_{station}.json'
-        with open(file_name, 'w', encoding='utf-8-sig') as f:
-            dump(data.iloc[1:, :].to_dict(orient='records'), f)
-            print('Success: Meteorlogical data dump')
+        url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
+        path = 'Session-Logger/session-logger-backend/data/'
+        file_name = f'{path}RAW_meteor_data_{station}.csv'
+        cmd = f'wget -O {file_name} {url}'
+        system(cmd)
+        print('Success: Full Meteorlogical data dump')
 
     except Exception as e:
         raise CustFlaskException('Unable to locate data.', status_code=404) from e
 
 
-def ping_station(station):
+def dump_raw_spec_data(station: str) -> None:
+    """
+    Retrieve the most recent raw spectral data from NDBC station. This particular
+    data set is retrieved from the station by using the .data_spec extension.
+    Currently only supports 25 hours worth of data dumped at a time. Uses wget 
+    via the OS to download the file and deposit it in CSV format into the 
+    specified file.
+    :params:
+        station -- str representing buoy station number.
+    """
+    try:
+        url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.data_spec'
+        path = 'Session-Logger/session-logger-backend/data/'
+        file_name = f'{path}RAW_spectral_data_{station}.csv'
+        cmd = f'wget -O {file_name} {url}'
+        system(cmd)
+        print('Success: Raw spectral data dump')
+
+    except Exception as e:
+        raise CustFlaskException('Unable to locate data.', status_code=404) from e
+
+
+def ping_station(station: str) -> None:
     """
     Ping the desired station once an hour to stay updated.
     :params:
@@ -67,11 +92,13 @@ def ping_station(station):
     """
     while True:
         print('Fetching meteorlogical data now.')
-        dump_buoy_data(station)
+        dump_full_meteor_data(station)
+        print('Fetching raw spectral data now.')
+        dump_raw_spec_data(station)
         sleep(3600)  # Once an hour
 
 
-def initialize_meteorlogical_thread(station_list):
+def initialize_buoy_ping_thread(station_list: list[str]) -> None:
     """
     Initialize the daemonized threads which will periodically ping the NDBC buoy
     stations for their data.
@@ -103,7 +130,7 @@ def handle_bad_file(error):
 
 if __name__ == '__main__':
     available_stations = ['46050']
-    initialize_meteorlogical_thread(available_stations)
+    initialize_buoy_ping_thread(available_stations)
 
-    app.run(debug=True, port=PORT_NUM)
+    app.run(debug=False, port=PORT_NUM)
     print(f'Running on port {PORT_NUM}')
