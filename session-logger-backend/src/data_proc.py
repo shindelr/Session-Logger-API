@@ -178,7 +178,8 @@ class BuoyData:
         """
         wdir_no_mm = df[df['WDIR'] != 'MM']  # Retrieve valid data only
         wdir_col = wdir_no_mm[['WDIR']]  # Isolate column
-        return float(wdir_col.at[1, 'WDIR'])  # Retrieve val
+        # Retrieve val at first row
+        return float(wdir_col.at[wdir_col.index[0], 'WDIR'])
 
 
     def get_most_recent_wdir_cardinal(self, df: DataFrame) -> str:
@@ -222,7 +223,9 @@ def main():
     bdc = BuoyData()
     df = bdc.build_da_frame(fp)
     df = bdc.trunc_meteor_df_24_hrs(df)
-    print(bdc.get_df_in_timeframe(df, '12:30', '14:30'))
+    df = bdc.get_df_in_timeframe(df, '12:30', '14:30')
+    print(df)
+    print(bdc.get_most_recent_wdir_cardinal(df))
 
 if __name__ == '__main__':
     main()
