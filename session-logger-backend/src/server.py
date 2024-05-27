@@ -31,7 +31,6 @@ def session_form_submission():
     :return:
         A success message for successful connectino.
     """
-    sleep(1)
     data = request.json
     print(data)
     return jsonify({'message': 'Form received successfully'})
@@ -52,7 +51,7 @@ def dump_full_meteor_data(station: str) -> None:
 
     try:
         url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
-        path = 'Session-Logger/session-logger-backend/data/'
+        path = r'/Users/robinshindelman/repos/The\ Surf\ App/Session-Logger/session-logger-backend/data/'
         file_name = f'{path}RAW_meteor_data_{station}.csv'
         cmd = f'wget -O {file_name} {url}'
         system(cmd)
@@ -74,7 +73,7 @@ def dump_raw_spec_data(station: str) -> None:
     """
     try:
         url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.data_spec'
-        path = 'Session-Logger/session-logger-backend/data/'
+        path = r'/Users/robinshindelman/repos/The\ Surf\ App/Session-Logger/session-logger-backend/data/'
         file_name = f'{path}RAW_spectral_data_{station}.csv'
         cmd = f'wget -O {file_name} {url}'
         system(cmd)
@@ -95,7 +94,7 @@ def ping_station(station: str) -> None:
         dump_full_meteor_data(station)
         print('Fetching raw spectral data now.')
         dump_raw_spec_data(station)
-        sleep(3600)  # Once an hour
+        sleep(1200)  # Every twenty minutes
 
 
 def initialize_buoy_ping_thread(station_list: list[str]) -> None:
