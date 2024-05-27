@@ -159,11 +159,14 @@ class BuoyData:
         :returns:
         - A much smaller dataframe.
         """
-        start_hh, end_hh = start[:2], end[:2]
+        start_hh, end_hh = int(start[:2]), int(end[:2])
+        hours = [str(_) for _ in range(start_hh, end_hh + 1)]
+        print(hours)
         # start_mm, end_mm = start[2:], end[2:]
         today = date.today().day  # Day of the month (int)
         df = df[df['DD'] == str(today)]
-        return df[(df['hh'].isin([start_hh, end_hh]))]
+        # return df[(df['hh'].isin([start_hh, end_hh]))]
+        return df[(df['hh'].isin(hours))]
 
 
     def get_most_recent_wdir_deg(self, df: DataFrame) -> float:
