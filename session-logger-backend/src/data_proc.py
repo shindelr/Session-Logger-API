@@ -3,8 +3,9 @@ This module handles data cleaning and processing before being handed off to the
 database. It handles swell discovery from raw spectra data, conversion of units
 from metric or degree to standard or cardinal, etc..
 """
+from datetime import date
 from pint import UnitRegistry, Quantity
-from pandas import read_csv, errors, set_option, DataFrame
+from pandas import read_csv, errors, DataFrame
 
 class UnitConverter:
     """
@@ -129,7 +130,7 @@ class BuoyData:
         except errors.ParserError as pe:
             print(f'Exception ocurred: {pe}')
         return data
-   
+
 
     def trunc_meteor_df_24_hrs(self, df: DataFrame) -> DataFrame:
         """
@@ -142,9 +143,27 @@ class BuoyData:
         :returns:
         - Truncated pandas dataframe.
         """
-        df = df[['#YY', 'MM', 'DD', 'mm', 'WDIR', 'WSPD', 'GST',
-                'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']]
+        df = df[['#YY', 'MM', 'DD', 'hh', 'mm', 'WDIR', 'WSPD',
+                'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']]
         return df.iloc[:145, :]  # 24 hrs worth of rows
+
+
+    def get_df_in_timeframe(self, df: DataFrame,
+                            start: str, end: str) -> DataFrame:
+        """
+        Retrieve a subset of the dataframe holding information only from the
+        hours given. For use only with dataframes containing 'DD' and 'hh' cols.
+        - df: A pandas dataframe.
+        - start: string representing the time to begin with.
+        - end: string representing the time to end with.\n
+        :returns:
+        - A much smaller dataframe.
+        """
+        start_hh, end_hh = start[:2], end[:2]
+        # start_mm, end_mm = start[2:], end[2:]
+        today = date.today().day  # Day of the month (int)
+        df = df[df['DD'] == str(today)]
+        return df[(df['hh'].isin([start_hh, end_hh]))]
 
 
     def get_most_recent_wdir_deg(self, df: DataFrame) -> float:
@@ -160,6 +179,7 @@ class BuoyData:
         wdir_no_mm = df[df['WDIR'] != 'MM']  # Retrieve valid data only
         wdir_col = wdir_no_mm[['WDIR']]  # Isolate column
         return float(wdir_col.at[1, 'WDIR'])  # Retrieve val
+
 
     def get_most_recent_wdir_cardinal(self, df: DataFrame) -> str:
         """
@@ -202,9 +222,7 @@ def main():
     bdc = BuoyData()
     df = bdc.build_da_frame(fp)
     df = bdc.trunc_meteor_df_24_hrs(df)
-    print(bdc.get_most_recent_wdir_deg(df))
-    print(bdc.get_most_recent_wdir_cardinal(df))
-
+    print(bdc.get_df_in_timeframe(df, '12:30', '14:30'))
 
 if __name__ == '__main__':
     main()
