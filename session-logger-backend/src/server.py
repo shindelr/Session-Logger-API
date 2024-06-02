@@ -38,8 +38,8 @@ def session_form_submission():
 
     means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
     print(f'Returning: {means}')
-    
-    return jsonify({'message': f'{means}'})
+
+    return jsonify({'message': f'Success: {means}'})
 
 
 # UTILITIES
@@ -99,7 +99,7 @@ def dump_raw_spec_data(station: str) -> None:
     try:
         url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.data_spec'
         path = r'/Users/robinshindelman/repos/The\ Surf\ App/Session-Logger/session-logger-backend/data/'
-        file_name = f'{path}RAW_spectral_data_{station}.csv'
+        file_name = f'{path}RAW_spectral_data_{station}.spec'
         cmd = f'wget -O {file_name} {url}'
         system(cmd)
         print('Success: Raw spectral data dump')
