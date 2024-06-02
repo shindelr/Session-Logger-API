@@ -163,6 +163,7 @@ class BuoyData:
         hours = [str(_) for _ in range(start_hh, end_hh + 1)]  # Range of hours
 
         today = date.today().day  # Day of the month (int)
+        today = f'0{today}' if today < 10 else today
         df = df[df['DD'] == str(today)]
 
         return df[(df['hh'].isin(hours))]
@@ -228,13 +229,13 @@ class BuoyData:
 
 def main():
     """Main function. Mostly just testing stuff."""
-    fp = '../data/RAW_meteor_data_46050.csv'
+    fp = 'data/RAW_meteor_data_46050.csv'
     bdc = BuoyData()
     df = bdc.build_da_frame(fp)
     df = bdc.trunc_meteor_df_24_hrs(df)
     df = bdc.get_df_in_timeframe(df, '12:30', '14:30')
     print(df)
-    print(bdc.get_most_recent_wdir_cardinal(df))
+    # print(bdc.get_most_recent_wdir_cardinal(df))
 
 if __name__ == '__main__':
     main()

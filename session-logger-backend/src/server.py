@@ -109,6 +109,8 @@ def initialize_buoy_ping_thread(station_list: list[str]) -> None:
     # Will need to figure out how to handle the data dump from multiple stations.
     # Maybe a new file for each available station?
 
+    # !!!!!!!! HANDLE CONCURRENT DATA ACCESS IN THE CSV FILES !!!!!!!!!!!
+
     for station in station_list:
         # Create the thread targeting the ping_station function
         station_thread = Thread(target=ping_station, args=(station, ))  # args expects tuple
@@ -131,5 +133,5 @@ if __name__ == '__main__':
     available_stations = ['46050']
     initialize_buoy_ping_thread(available_stations)
 
-    app.run(debug=False, port=PORT_NUM)
     print(f'Running on port {PORT_NUM}')
+    app.run(debug=False, port=PORT_NUM)
