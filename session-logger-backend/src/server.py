@@ -5,6 +5,7 @@ from the database, and data processing.
 """
 
 # Third party imports
+from typing import Union
 from threading import Thread
 from time import sleep
 from os import system
@@ -13,6 +14,7 @@ from flask import Flask, request, jsonify
 
 # Robin made imports
 from errors import CustFlaskException
+from data_proc import BuoyData
 
 
 # APP SETUP
@@ -32,11 +34,34 @@ def session_form_submission():
         A success message for successful connectino.
     """
     data = request.json
-    print(data)
-    return jsonify({'message': 'Form received successfully'})
+    print(f'Received the following data:\n{data}')
+
+    means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
+    print(f'Returning: {means}')
+    
+    return jsonify({'message': f'{means}'})
 
 
 # UTILITIES
+def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str]]:
+    """
+    Retrieve a set of average meteorlogical values for the session. Includes
+    wind direction, speed, gust speed, sig wave height, period, and direction,
+    water and air temperature.
+    #### Parameters:
+    ----------------
+    - start: `str`
+        Start time for the session.
+    - end: `str`
+        End time for the session.
+    #### Returns:
+    -------------
+    A dictionary in the following format:
+        {"WDIR": 128.08, ...}
+    """
+    bd = BuoyData()
+    return bd.get_mean_meteor_vals(bd.curr_df, start, end)
+
 
 def dump_full_meteor_data(station: str) -> None:
     """

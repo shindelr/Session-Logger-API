@@ -3,7 +3,7 @@ This module handles data cleaning and processing before being handed off to the
 database. It handles swell discovery from raw spectra data, conversion of units
 from metric or degree to standard or cardinal, etc..
 """
-from datetime import date
+from datetime import date, datetime
 from pint import UnitRegistry, Quantity
 from pandas import read_csv, errors, DataFrame
 
@@ -105,6 +105,10 @@ class UnitConverter:
         return round(celsius.magnitude, 1)
 
 
+class BuoyDataException(Exception):
+    """Handle exceptions related to the BuoyData class"""
+
+
 class BuoyData:
     """
     Buoy data utility. Do things like excise useless data columns, convert
@@ -112,6 +116,8 @@ class BuoyData:
     """
     def __init__(self) -> None:
         self.unit_conv = UnitConverter()
+        self.stonewall_bank_csv = 'data/RAW_meteor_data_46050.csv'
+        self.curr_df = self.build_da_frame(self.stonewall_bank_csv)
 
 
     def build_da_frame(self, file_path: str) -> DataFrame:
@@ -153,21 +159,26 @@ class BuoyData:
         """
         Retrieve a subset of the dataframe holding information only from the
         hours given. For use only with dataframes containing 'DD' and 'hh' cols.
+        For some reason, the start and end times have to be padded by 7 hours
+        to get the correct hourly metric in the downloaded NDBC data.
+        #### Parameters:
+        ----------------
         - df: A pandas dataframe.
         - start: string representing the time to begin with.
         - end: string representing the time to end with.\n
-        :returns:
+        #### Returns:
+        ------------
         - A much smaller dataframe where all values are converted to floats.
         """
-        start_hh, end_hh = int(start[:2]), int(end[:2])
+        start_hh, end_hh = int(start[:2]) + 7, int(end[:2]) + 7
         hours = [str(_) for _ in range(start_hh, end_hh + 1)]  # Range of hours
 
-        today = date.today().day  # Day of the month (int)
+        today = date.today().day
         today = f'0{today}' if today < 10 else today
-        df = df[df['DD'] == str(today)]
+        df = df[df['DD'] == str(today)]  # Get rows only with today's date
         df = df[(df['hh'].isin(hours))]
         self.drop_mm(df)
-        return df.astype(float)
+        return df.astype(float)  # Converts all data to floats
 
 
     def drop_mm(self, df: DataFrame):
@@ -175,14 +186,83 @@ class BuoyData:
         Clean any null values out of the given dataframe. Null values must be
         represented by the string "MM", as built in to the NOAA meteorlogical
         data. Replaces "MM" with None.
-        ####Parameters:
+        #### Parameters:
         ---------------
         - df: A pandas dataframe.
-        ####Returns:
+        #### Returns:
         ------------
         A pandas dataframe where "MM" is replaced with None. 
         """
         df.replace(to_replace='MM', value=None, inplace=True)
+
+
+    def get_mean_meteor_vals(
+                self, df: DataFrame, start: str, end: str) -> dict[str, float]:
+        """
+        Get the mean values of the following data: 'WDIR', 'WSPD', 'GST', 'WVHT',
+        'DPD', 'MWD', 'ATMP', 'WTMP'. Values are calculated from the argued data 
+        frame, which is truncated to just the hours passed in by the `start` and 
+        `end` parameters. This time truncation is imprecise as minutes are 
+        disregarded. So for example, 2:25pm to 4:05pm will simply create a data
+        frame including all data samples from 2:00pm to 4:50pm.
+        #### Parameters:
+        ----------------
+        - df: A pandas data frame.
+        - start: The time at which data evaluation should begin. 
+        - end: The time at which data evaluation should end.\n
+        Note: start and end values which have not happened yet in PST will not be
+        successful and an exception will be raised.
+        #### Returns:
+        -------------
+        A dictionary containing the mean values of each column plus a cardinal
+        wind direct in the timeframe, minus the data-time values themselves. 
+        Format: {"WDIR": 128.08, ...}\n
+        All the values in the resulting dict are in their original units.
+        """
+
+        # Handle incorrect times
+        current_hour = datetime.time(datetime.now()).hour
+        if current_hour < int(start[:2]) or\
+              int(start[:2]) > int(end[:2]) or\
+              current_hour < int(end[:2]):
+            raise BuoyDataException(f"Invalid timeframe, {start} -> {end}")
+
+        df = self.trunc_meteor_df_24_hrs(df)
+        df = self.get_df_in_timeframe(df, start, end)
+        cols = ['WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']
+        mean_series = df[cols].mean()
+        mean_series = mean_series.round(decimals=2)
+        mean_series = mean_series.to_dict()
+        self.convert_means_dict_units_to_std(mean_series)
+        return mean_series
+
+
+    def convert_means_dict_units_to_std(self, means: dict[str, float]) -> None:
+        """
+        Convert all values in the mean dictionary created from `get_mean_meteor_vals()`
+        into their standard units.
+        #### Parameters:
+        ----------------
+        - means: A dictionary generated via the `get_mean_meteor_vals()`
+            method.
+        #### Returns:
+        -------------
+            None, the dict is mutated.
+        """
+        if means['WDIR']:
+            means['WDIR_CARD'] = self.unit_conv.find_cardinal_direction(int(means['WDIR']))
+        if means['WSPD']:
+            means['WSPD'] = self.unit_conv.meters_per_sec_to_mph(means['WSPD'])
+        if means['GST']:
+            means['GST'] = self.unit_conv.meters_per_sec_to_mph(means['GST'])
+        if means['WVHT']:
+            means['WVHT'] = self.unit_conv.meters_to_feet(means['WVHT'])
+        if means['MWD']:
+            means['MWD_CARD'] = self.unit_conv.find_cardinal_direction(int(means['MWD']))
+        if means['ATMP']:
+            means['ATMP'] = self.unit_conv.celsius_to_fahrenheit(means['ATMP'])
+        if means['WTMP']:
+            means['WTMP'] = self.unit_conv.celsius_to_fahrenheit(means['WTMP'])
 
 
     def get_most_recent_wdir_deg(self, df: DataFrame) -> float:
@@ -215,36 +295,22 @@ class BuoyData:
         return self.unit_conv.find_cardinal_direction(int(wdir))
 
 
+
+    # OPTIONAL:
+    # ----------------------------------------------------
     # def get_most_recent_wspd(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_gst(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_wvht(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_dpd(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_mwd(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_atmp(self, df: DataFrame) -> ?:
-
-
     # def get_most_recent_wtmp(self, df: DataFrame) -> ?:
 
 
 def main():
     """Main function. Mostly just testing stuff."""
-    fp = 'data/RAW_meteor_data_46050.csv'
     bdc = BuoyData()
-    df = bdc.build_da_frame(fp)
-    df = bdc.trunc_meteor_df_24_hrs(df)
-    df = bdc.get_df_in_timeframe(df, '12:30', '14:30')
-    print(df)
-    print(df[['WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']].mean())
+    print(bdc.get_mean_meteor_vals(bdc.curr_df, "12:30", "13:30"))
 
 if __name__ == '__main__':
     main()
