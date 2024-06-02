@@ -157,7 +157,7 @@ class BuoyData:
         - start: string representing the time to begin with.
         - end: string representing the time to end with.\n
         :returns:
-        - A much smaller dataframe.
+        - A much smaller dataframe where all values are converted to floats.
         """
         start_hh, end_hh = int(start[:2]), int(end[:2])
         hours = [str(_) for _ in range(start_hh, end_hh + 1)]  # Range of hours
@@ -165,15 +165,24 @@ class BuoyData:
         today = date.today().day  # Day of the month (int)
         today = f'0{today}' if today < 10 else today
         df = df[df['DD'] == str(today)]
+        df = df[(df['hh'].isin(hours))]
+        self.drop_mm(df)
+        return df.astype(float)
 
-        return df[(df['hh'].isin(hours))]
 
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-            # WHY NOT JUST TAKE THE MEAN OF EVERYTHING AND   #
-            # REPORT THAT???                                 #
-            # Just take the mean values from the time frame  #
-            # given and store that in the database!          #
-            # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+    def drop_mm(self, df: DataFrame):
+        """
+        Clean any null values out of the given dataframe. Null values must be
+        represented by the string "MM", as built in to the NOAA meteorlogical
+        data. Replaces "MM" with None.
+        ####Parameters:
+        ---------------
+        - df: A pandas dataframe.
+        ####Returns:
+        ------------
+        A pandas dataframe where "MM" is replaced with None. 
+        """
+        df.replace(to_replace='MM', value=None, inplace=True)
 
 
     def get_most_recent_wdir_deg(self, df: DataFrame) -> float:
@@ -235,7 +244,7 @@ def main():
     df = bdc.trunc_meteor_df_24_hrs(df)
     df = bdc.get_df_in_timeframe(df, '12:30', '14:30')
     print(df)
-    # print(bdc.get_most_recent_wdir_cardinal(df))
+    print(df[['WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']].mean())
 
 if __name__ == '__main__':
     main()
