@@ -5,17 +5,18 @@ from the database, and data processing.
 """
 
 # Third party imports
+import os
 from typing import Union
 from threading import Thread
 from time import sleep
 from os import system
 from flask_cors import CORS
 from flask import Flask, request, jsonify
+from pyodbc import connect
 
 # Robin made imports
 from errors import CustFlaskException
 from data_proc import BuoyData
-
 
 # APP SETUP
 app = Flask(__name__)
@@ -39,8 +40,29 @@ def session_form_submission():
     means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
     print(f'Returning: {means}')
 
+    data.update(means)
+    print(f'Full data: {data}')
+
+    cursor = connect_to_db()
+
+#     submssion_query = """
+#             exec session_data 
+
+# """
+
+    cursor.execute("EXEC session_data()")
+
     return jsonify({'message': f'Success: {means}'})
 
+# DB CONNECTION
+def connect_to_db():
+    """
+    """
+    conn_string = os.environ['AZURE_SQL_CONNECTIONSTRING']
+    conn = connect(conn_string)
+    cursor = conn.cursor()
+
+    return cursor
 
 # UTILITIES
 def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str]]:

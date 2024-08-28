@@ -116,7 +116,7 @@ class BuoyData:
     """
     def __init__(self) -> None:
         self.unit_conv = UnitConverter()
-        self.stonewall_bank_csv = 'data/RAW_meteor_data_46050.csv'
+        self.stonewall_bank_csv = 'Session-Logger/session-logger-backend/data/RAW_meteor_data_46050.csv'
         self.curr_df = self.build_da_frame(self.stonewall_bank_csv)
 
 
@@ -293,18 +293,6 @@ class BuoyData:
         """
         wdir = self.get_most_recent_wdir_deg(df)
         return self.unit_conv.find_cardinal_direction(int(wdir))
-
-
-
-    # OPTIONAL:
-    # ----------------------------------------------------
-    # def get_most_recent_wspd(self, df: DataFrame) -> ?:
-    # def get_most_recent_gst(self, df: DataFrame) -> ?:
-    # def get_most_recent_wvht(self, df: DataFrame) -> ?:
-    # def get_most_recent_dpd(self, df: DataFrame) -> ?:
-    # def get_most_recent_mwd(self, df: DataFrame) -> ?:
-    # def get_most_recent_atmp(self, df: DataFrame) -> ?:
-    # def get_most_recent_wtmp(self, df: DataFrame) -> ?:
 
 
 def main():
