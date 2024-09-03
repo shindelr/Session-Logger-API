@@ -5,7 +5,8 @@ from metric or degree to standard or cardinal, etc..
 """
 from datetime import date, datetime
 from pint import UnitRegistry, Quantity
-from pandas import read_csv, errors, DataFrame
+from pandas import read_csv, errors, DataFrame, Timestamp, to_datetime, to_numeric
+from subprocess import run
 
 class UnitConverter:
     """
@@ -105,8 +106,8 @@ class UnitConverter:
         return round(celsius.magnitude, 1)
 
 
-class BuoyDataException(Exception):
-    """Handle exceptions related to the BuoyData class"""
+class InvalidTimeframeException(Exception):
+    """Invalid time frame entered."""
 
 
 class BuoyData:
@@ -117,8 +118,7 @@ class BuoyData:
     def __init__(self) -> None:
         self.unit_conv = UnitConverter()
         self.stonewall_bank_csv = 'Session-Logger/session-logger-backend/data/RAW_meteor_data_46050.csv'
-        self.curr_df = self.build_da_frame(self.stonewall_bank_csv)
-
+        self.curr_df = self.build_da_frame(self.stonewall_bank_csv)  # Deprecated
 
     def build_da_frame(self, file_path: str) -> DataFrame:
         """
@@ -136,6 +136,110 @@ class BuoyData:
         except errors.ParserError as pe:
             print(f'Exception ocurred: {pe}')
         return data
+
+    def build_da_frame_2(self, sesh_date: str, time_in: str, time_out: str, url: str) -> DataFrame:
+        """
+        Read NDBC text file into a Pandas dataframe. Intended to use as the initial
+        reading in of raw data from the buoys.
+        :params:
+        - sesh_date: A string denoting the date of the session.
+        - time_in: A string denoting the start time of the session.
+        - time_out: A string denoting the end time of the session.
+        - url: A string denoting the URL from which to fetch the data.
+        :returns:
+        - A pandas dataframe object.
+        """
+        cmd = self.build_command(sesh_date, time_in, time_out, url)
+
+        # Run the command and capture the output, decode it to a string
+        out = run(cmd, shell=True, capture_output=True).stdout.decode('utf- 8')
+
+        # Split the output into lines on the newline
+        raw_lines = out.split('\n')
+
+        # Remove empty lines, clean off any whitespace, and split into columns
+        clean_lines = [line.split() for line in raw_lines if line.strip()]
+
+        cols = ['#YY', 'MM', 'DD', 'hh', 'mm', 'WDIR', 'WSPD', 'GST', 'WVHT', 'DPD',
+                'APD', 'MWD', 'PRES', 'ATMP', 'WTMP', 'DEWP', 'VIS', 'PTDY', 'TIDE']
+
+        return DataFrame(clean_lines, columns=cols)
+
+
+    def parse_time_and_date(self, sesh_date: str, time_in: str, time_out: str) -> tuple[str]:
+        """
+        Parse the date and time strings into the appropriate format for the command
+        string. Hours are shifted by 7 from PST to UTC, which is the universal time
+        zone used by the NDBC.
+
+        Parameters:
+        -----------
+        date: str
+            The date in the format 'YYYY-MM-DD'.
+        time_in: str
+            The start time in the format 'HH:MM'.
+        time_out: str
+            The end time in the format 'HH:MM'.
+
+        Returns:
+        --------
+        tuple[str]: The parsed date and time strings.
+        """
+
+        # Build timestamps
+        stamp_in = Timestamp(f'{sesh_date} {time_in}')
+        stamp_out = Timestamp(f'{sesh_date} {time_out}')
+
+        # Localize in PST then convert to UTC
+        pst_in = to_datetime(stamp_in).tz_localize('US/Pacific')
+        pst_out = to_datetime(stamp_out).tz_localize('US/Pacific')
+        utc_in = pst_in.tz_convert('UTC')
+        utc_out = pst_out.tz_convert('UTC')
+
+        # Format strings to be able to filter NDBC data
+        hr_in = f'{utc_in.hour:02d}'
+        min_in = f'{utc_in.minute:02d}'
+        hr_out = f'{utc_out.hour:02d}'
+        min_out = f'{utc_out.minute:02d}'
+        month = f'{utc_in.month:02d}'
+        day = f'{utc_in.day:02d}'
+
+        return hr_in, min_in, hr_out, min_out, month, day
+
+    def build_command(self, sesh_date: str, time_in: str, time_out: str, url: str) -> str:
+        """
+        Build a command string for fetching data from a specific URL and filtering 
+        it based on time and date.
+
+        Parameters:
+        -----------
+        date: str
+            The date in the format 'YYYY-MM-DD'.
+        time_in: str
+            The start time in the format 'HH:MM'.
+        time_out: str
+            The end time in the format 'HH:MM'.
+        url: str
+            The URL from which to fetch the data.
+
+        Returns:
+        --------
+        str: The constructed command string.
+        """
+        hr_in, min_in, hr_out, min_out, month, day = self.parse_time_and_date(sesh_date,
+                                                                        time_in,
+                                                                        time_out)
+        # Command construction
+        time = (
+            f"($4 == {hr_in} && $5 >= {min_in}) || "
+            f"($4 > {hr_in} && $4 < {hr_out}) || "
+            f"($4 == {hr_out} && $5 <= {min_out})"
+        )
+        utc_date = f"($2 == {month} && $3 == {day})"
+        awk = f"awk '{utc_date} && ({time})' "
+        wget = f'wget -qO- {url}'
+
+        return f'{wget} | {awk}'
 
 
     def trunc_meteor_df_24_hrs(self, df: DataFrame) -> DataFrame:
@@ -225,11 +329,38 @@ class BuoyData:
         if current_hour < int(start[:2]) or\
               int(start[:2]) > int(end[:2]) or\
               current_hour < int(end[:2]):
-            raise BuoyDataException(f"Invalid timeframe, {start} -> {end}")
+            raise InvalidTimeframeException(f"Invalid timeframe, {start} -> {end}")
 
         df = self.trunc_meteor_df_24_hrs(df)
         df = self.get_df_in_timeframe(df, start, end)
         cols = ['WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']
+        mean_series = df[cols].mean()
+        mean_series = mean_series.round(decimals=2)
+        mean_series = mean_series.to_dict()
+        self.convert_means_dict_units_to_std(mean_series)
+        return mean_series
+
+
+    def get_mean_meteor_vals_2(self, sesh_date: str, time_in: str, time_out: str,
+                                url: str) -> dict[str, float]:
+        """
+        A more precise and accurate version of the `get_mean_meteor_vals()` method.
+        The build_da_frame_2() method uses wget and awk to filter the data down
+        to the exact timeframe argued, including minutes. This method will also
+        covert all timestamps from PST to UTC, which is the timezone used by the
+        NDBC.
+        """
+        # Handle incorrect times
+        current_hour = datetime.time(datetime.now()).hour
+        if current_hour < int(time_in[:2]) or\
+              int(time_in[:2]) > int(time_out[:2]) or\
+              current_hour < int(time_out[:2]):
+            raise InvalidTimeframeException(f"Invalid timeframe, {time_in} -> {time_out}")
+
+        df = self.build_da_frame_2(sesh_date, time_in, time_out, url)
+        cols = ['WDIR', 'WSPD', 'GST', 'WVHT', 'DPD', 'MWD', 'ATMP', 'WTMP']
+        self.drop_mm(df)
+        df[cols] = df[cols].apply(to_numeric, errors='coerce')
         mean_series = df[cols].mean()
         mean_series = mean_series.round(decimals=2)
         mean_series = mean_series.to_dict()
@@ -298,7 +429,13 @@ class BuoyData:
 def main():
     """Main function. Mostly just testing stuff."""
     bdc = BuoyData()
-    print(bdc.get_mean_meteor_vals(bdc.curr_df, "12:30", "13:30"))
+    # Parameters
+    ymd = "2024-09-01"
+    t_in = "14:00"
+    t_out = "16:20"
+    STATION = '46050'
+    url = f'https://www.ndbc.noaa.gov/data/realtime2/{STATION}.txt'
+    print(bdc.get_mean_meteor_vals_2(ymd, t_in, t_out, url))
 
 if __name__ == '__main__':
     main()

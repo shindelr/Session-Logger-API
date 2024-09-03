@@ -12,7 +12,8 @@ from time import sleep
 from os import system
 from flask_cors import CORS
 from flask import Flask, request, jsonify
-from pyodbc import connect
+import pyodbc
+from dotenv import load_dotenv
 
 # Robin made imports
 from errors import CustFlaskException
@@ -22,7 +23,6 @@ from data_proc import BuoyData
 app = Flask(__name__)
 CORS(app)
 PORT_NUM = 5001
-
 
 # ROUTES
 
@@ -37,32 +37,53 @@ def session_form_submission():
     data = request.json
     print(f'Received the following data:\n{data}')
 
-    means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
-    print(f'Returning: {means}')
+    # means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
+    means = get_sesh_meteor_averages_2()
 
     data.update(means)
     print(f'Full data: {data}')
 
-    cursor = connect_to_db()
+    cursor, conn = connect_to_db()
 
-#     submssion_query = """
-#             exec session_data 
+    # Missing date, username, tideIncoming, and tideMax/Min
+    submssion_query_str = """
+                        exec session_data @SpotName = ?, @TimeIn = ?, @TimeOut = ?,
+                            @Rating = ?, @ATemp = ?, @WTemp = ?,
+                            @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
+                            @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
+                            @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?
+                    """
 
-# """
+    try:
+        # Missing date, username, tideIncoming, and tideMax/Min
+        cursor.execute(submssion_query_str,
+                    data['spot'], data['timeIn'], data['timeOut'],
+                    data['rating'], data['ATMP'], data['WTMP'],
+                    data['MWD'], data['MWD_CARD'], data['WVHT'],
+                    data['DPD'], data['WDIR'], data['WDIR_CARD'],
+                    data['WSPD'], data['GST']
+                    )
+        conn.commit()
+    except pyodbc.Error as e:
+        print(f'Error: {e}')
+        return jsonify({'message': 'Error: Unable to connect to the database.'})
 
-    cursor.execute("EXEC session_data()")
+    cursor.close()
+    conn.close()
 
     return jsonify({'message': f'Success: {means}'})
 
 # DB CONNECTION
 def connect_to_db():
     """
+    Establish a connection to the Azure SQL database.
+    :return:
+        A tuple containing the cursor and connection objects.
     """
-    conn_string = os.environ['AZURE_SQL_CONNECTIONSTRING']
-    conn = connect(conn_string)
+    load_dotenv()
+    conn = pyodbc.connect(os.environ['AZURE_CONN_STR'])
     cursor = conn.cursor()
-
-    return cursor
+    return cursor, conn
 
 # UTILITIES
 def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str]]:
@@ -83,6 +104,21 @@ def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str
     """
     bd = BuoyData()
     return bd.get_mean_meteor_vals(bd.curr_df, start, end)
+
+def get_sesh_meteor_averages_2(sesh_date: str, time_in: str, time_out: str, station: str) -> dict[str, float]:
+    """
+    Retrieve a set of average meteorlogical values for the session. Includes
+    wind direction, speed, gust speed, sig wave height, period, and direction,
+    water and air temperature.
+    :params:
+        time_in -- str representing the start time of the session.
+        time_out -- str representing the end time of the session.
+        station -- str representing the buoy station number.
+    :return:
+        A dictionary in the following format:
+            {"WDIR": 128.08, ...}
+    """
+    
 
 
 def dump_full_meteor_data(station: str) -> None:
@@ -181,4 +217,4 @@ if __name__ == '__main__':
     initialize_buoy_ping_thread(available_stations)
 
     print(f'Running on port {PORT_NUM}')
-    app.run(debug=False, port=PORT_NUM)
+    app.run(debug=True, port=PORT_NUM, host="0.0.0.0")
