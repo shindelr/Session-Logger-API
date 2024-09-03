@@ -150,7 +150,7 @@ class BuoyData:
         - A pandas dataframe object.
         """
         cmd = self.build_command(sesh_date, time_in, time_out, url)
-
+        print(cmd)
         # Run the command and capture the output, decode it to a string
         out = run(cmd, shell=True, capture_output=True).stdout.decode('utf- 8')
 
@@ -351,10 +351,13 @@ class BuoyData:
         NDBC.
         """
         # Handle incorrect times
-        current_hour = datetime.time(datetime.now()).hour
-        if current_hour < int(time_in[:2]) or\
-              int(time_in[:2]) > int(time_out[:2]) or\
-              current_hour < int(time_out[:2]):
+        # current_hour = datetime.time(datetime.now()).hour
+        # if current_hour < int(time_in[:2]) or\
+        #       int(time_in[:2]) > int(time_out[:2]) or\
+        #       current_hour < int(time_out[:2]):
+        #     raise InvalidTimeframeException(f"Invalid timeframe, {time_in} -> {time_out}")
+
+        if int(time_in[:2]) > int(time_out[:2]):
             raise InvalidTimeframeException(f"Invalid timeframe, {time_in} -> {time_out}")
 
         df = self.build_da_frame_2(sesh_date, time_in, time_out, url)

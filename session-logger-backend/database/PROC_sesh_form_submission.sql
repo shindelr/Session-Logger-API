@@ -16,7 +16,7 @@ CREATE PROCEDURE dbo.session_data
     @SpotName varchar(200),
 
     -- Session
-    @Date date = Null,
+    @Date date,
     @TimeIn time,
     @TimeOut time,
     @Rating int,

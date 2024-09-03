@@ -37,27 +37,37 @@ def session_form_submission():
     data = request.json
     print(f'Received the following data:\n{data}')
 
+    # Connect to the database
+    cursor, conn = connect_to_db()
+
+    station_query = "select BuoyNum from Location where SpotName = ?"
+    try:
+        cursor.execute(station_query, data['spot'])
+        row = cursor.fetchone()
+        station = row.BuoyNum
+    except pyodbc.Error as e:
+        print(f'Error: {e}')
+        return jsonify({'message': 'Error: Unable to connect to the database.'})
+
     # means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
-    means = get_sesh_meteor_averages_2()
+    means = get_sesh_meteor_averages_2(data['date'], data['timeIn'], data['timeOut'], station)
 
     data.update(means)
     print(f'Full data: {data}')
 
-    cursor, conn = connect_to_db()
-
     # Missing date, username, tideIncoming, and tideMax/Min
     submssion_query_str = """
-                        exec session_data @SpotName = ?, @TimeIn = ?, @TimeOut = ?,
-                            @Rating = ?, @ATemp = ?, @WTemp = ?,
-                            @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
-                            @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
-                            @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?
+                        exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
+                        @TimeOut = ?, @Rating = ?, @ATemp = ?, @WTemp = ?,
+                        @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
+                        @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
+                        @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?
                     """
 
     try:
         # Missing date, username, tideIncoming, and tideMax/Min
         cursor.execute(submssion_query_str,
-                    data['spot'], data['timeIn'], data['timeOut'],
+                    data['spot'], data['date'][:10], data['timeIn'], data['timeOut'],
                     data['rating'], data['ATMP'], data['WTMP'],
                     data['MWD'], data['MWD_CARD'], data['WVHT'],
                     data['DPD'], data['WDIR'], data['WDIR_CARD'],
@@ -118,7 +128,10 @@ def get_sesh_meteor_averages_2(sesh_date: str, time_in: str, time_out: str, stat
         A dictionary in the following format:
             {"WDIR": 128.08, ...}
     """
-    
+    bd = BuoyData()
+    url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
+    # Slice sesh_date to only include the date
+    return bd.get_mean_meteor_vals_2(sesh_date[:10], time_in, time_out, url)
 
 
 def dump_full_meteor_data(station: str) -> None:
@@ -214,7 +227,7 @@ def handle_bad_file(error):
 
 if __name__ == '__main__':
     available_stations = ['46050']
-    initialize_buoy_ping_thread(available_stations)
+    # initialize_buoy_ping_thread(available_stations)
 
     print(f'Running on port {PORT_NUM}')
     app.run(debug=True, port=PORT_NUM, host="0.0.0.0")
