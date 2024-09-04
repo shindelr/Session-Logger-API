@@ -117,8 +117,8 @@ class BuoyData:
     """
     def __init__(self) -> None:
         self.unit_conv = UnitConverter()
-        self.stonewall_bank_csv = 'Session-Logger/session-logger-backend/data/RAW_meteor_data_46050.csv'
-        self.curr_df = self.build_da_frame(self.stonewall_bank_csv)  # Deprecated
+        # self.stonewall_bank_csv = 'Session-Logger/session-logger-backend/data/RAW_meteor_data_46050.csv'
+        # self.curr_df = self.build_da_frame(self.stonewall_bank_csv)  # Deprecated
 
     def build_da_frame(self, file_path: str) -> DataFrame:
         """
@@ -351,12 +351,6 @@ class BuoyData:
         NDBC.
         """
         # Handle incorrect times
-        # current_hour = datetime.time(datetime.now()).hour
-        # if current_hour < int(time_in[:2]) or\
-        #       int(time_in[:2]) > int(time_out[:2]) or\
-        #       current_hour < int(time_out[:2]):
-        #     raise InvalidTimeframeException(f"Invalid timeframe, {time_in} -> {time_out}")
-
         if int(time_in[:2]) > int(time_out[:2]):
             raise InvalidTimeframeException(f"Invalid timeframe, {time_in} -> {time_out}")
 

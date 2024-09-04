@@ -63,7 +63,6 @@ def session_form_submission():
                         @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
                         @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?
                     """
-
     try:
         # Missing date, username, tideIncoming, and tideMax/Min
         cursor.execute(submssion_query_str,
@@ -226,8 +225,5 @@ def handle_bad_file(error):
 
 
 if __name__ == '__main__':
-    available_stations = ['46050']
-    # initialize_buoy_ping_thread(available_stations)
-
     print(f'Running on port {PORT_NUM}')
     app.run(debug=True, port=PORT_NUM, host="0.0.0.0")
