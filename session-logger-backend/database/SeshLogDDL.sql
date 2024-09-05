@@ -10,16 +10,23 @@ CREATE TABLE dbo.LogUser
     email NVARCHAR(150) NULL
 );
 
--- Create a new table called 'Loc' in 'dbo'
+-- Create a new table called 'Location' in 'dbo'
 IF OBJECT_ID('dbo.Location', 'U') IS NOT NULL
 DROP TABLE dbo.Location
-CREATE TABLE dbo.Location
-(
-    LocationID INT IDENTITY(1, 1) NOT NULL PRIMARY KEY, 
-    SpotName NVARCHAR(200) NOT NULL,
-    BuoyNum INT NOT NULL,
-    Lat NVARCHAR(15),
-    Long NVARCHAR(15)
+CREATE TABLE [dbo].[Location] (
+    [LocationID]              INT            IDENTITY (1, 1) NOT NULL,
+    [SpotName]                NVARCHAR (200) NOT NULL,
+    [Lat]                     DECIMAL (8, 6) NULL,
+    [Long]                    DECIMAL (9, 6) NULL,
+    [Address]                 VARCHAR (255)  NULL,
+    [City]                    VARCHAR (255)  NULL,
+    [State]                   VARCHAR (255)  NULL,
+    [Zip]                     VARCHAR (255)  NULL,
+    [MeteorlogicalDataSource] INT            NULL,
+    [TideDataSource]          INT            NULL,
+    PRIMARY KEY CLUSTERED ([LocationID] ASC),
+    CONSTRAINT [MeteorlogicalDataSource] FOREIGN KEY ([MeteorlogicalDataSource]) REFERENCES [dbo].[Station] ([StationTableID]) ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT [TideDataSource] FOREIGN KEY ([TideDataSource]) REFERENCES [dbo].[Station] ([StationTableID])
 );
 
 -- Create a new table called 'Temps' in 'dbo'
@@ -98,3 +105,13 @@ CREATE TABLE dbo.SessionInfo
     FOREIGN KEY (WindID) REFERENCES dbo.Wind(WindID) on delete cascade on update cascade,
     FOREIGN KEY (UserID) REFERENCES dbo.LogUser(UserID) on delete cascade on update cascade
 );
+
+-- Create a new table called 'Station' in 'dbo'
+CREATE TABLE [dbo].[Station] (
+    [StationTableID] INT           IDENTITY (1, 1) NOT NULL,
+    [StationID]      VARCHAR (100) NOT NULL,
+    [Buoy]           BIT           NOT NULL,  -- 1 = buoy
+    [WeatherStation] BIT           NOT NULL,  -- 1 = weather station
+    PRIMARY KEY CLUSTERED ([StationTableID] ASC)
+);
+

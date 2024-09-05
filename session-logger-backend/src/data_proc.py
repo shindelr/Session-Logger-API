@@ -3,10 +3,11 @@ This module handles data cleaning and processing before being handed off to the
 database. It handles swell discovery from raw spectra data, conversion of units
 from metric or degree to standard or cardinal, etc..
 """
+from subprocess import run
 from datetime import date, datetime
 from pint import UnitRegistry, Quantity
 from pandas import read_csv, errors, DataFrame, Timestamp, to_datetime, to_numeric
-from subprocess import run
+from requests import get, exceptions
 
 class UnitConverter:
     """
@@ -19,7 +20,8 @@ class UnitConverter:
         self.ureg = UnitRegistry()
         # Separate Temperature Unit Registry
         self.ureg_temp = UnitRegistry()
-        self.ureg_temp.default_format = '.3f'
+        # self.ureg_temp.default_format = '.3f'
+        self.ureg_temp.formatter.default_format = '.3f'
 
 
     def find_cardinal_direction(self, value: int) -> str:
@@ -137,6 +139,7 @@ class BuoyData:
             print(f'Exception ocurred: {pe}')
         return data
 
+
     def build_da_frame_2(self, sesh_date: str, time_in: str, time_out: str, url: str) -> DataFrame:
         """
         Read NDBC text file into a Pandas dataframe. Intended to use as the initial
@@ -205,6 +208,7 @@ class BuoyData:
         day = f'{utc_in.day:02d}'
 
         return hr_in, min_in, hr_out, min_out, month, day
+
 
     def build_command(self, sesh_date: str, time_in: str, time_out: str, url: str) -> str:
         """
@@ -422,17 +426,95 @@ class BuoyData:
         wdir = self.get_most_recent_wdir_deg(df)
         return self.unit_conv.find_cardinal_direction(int(wdir))
 
+    def get_tides_noaa(self, station_id: str, time_in: str, time_out: str, sesh_date: str) -> DataFrame:
+        """
+        Retrieve a set of tide values for the session.
+        :params:
+            station_id -- str representing the station ID.
+            time_in -- str representing the start time of the session.
+            time_out -- str representing the end time of the session.
+            sesh_date -- str representing the date of the session.
+        :return:
+            A pandas dataframe. Where the headers are t: time, v: value.
+        """
+        payload = {
+            "station": station_id,
+            "begin_date": f"{sesh_date} {time_in}",
+            "end_date": f"{sesh_date} {time_out}",
+            "product": "water_level",
+            "datum": "MLLW",
+            "units": "english",
+            "time_zone": "lst",
+            "interval": "30",
+            "format": "json"
+        }
+        try:
+            response = get("https://api.tidesandcurrents.noaa.gov/api/prod/datagetter",
+                        params=payload, timeout=5)
+
+            data = response.json()
+            df = DataFrame(data['data'])[['t','v']]
+            df['t'] = to_datetime(df['t']) # Convert to datetime
+            df['v'] = df['v'].astype(float) # Convert to float
+            return df
+
+        except exceptions.RequestException as e:
+            print(f'Error: {e}')
+            return None
+
+
+    def get_tide_sesh_data(self, sesh_data: dict[str, str | int | float],
+                        station_id: str) -> dict[str, float | bool]:
+        """
+        Retrieve a set of tide values for the session.
+        :params:
+            sesh_data -- dict containing the session data.
+            station_id -- str representing the NOAA station ID.
+        :return:
+            A dictionary containing the tide values for the session:
+                {Incoming:bool, MaxHeight:float, MinHeigth:float, MedianHeight:float}
+        """
+        sesh_date = sesh_data['date'][:10]  # Slice to only include the date, no timestamp
+        sesh_date = sesh_date.replace('-', '')  # NOAA API requires date in the format YYYYMMDD
+        time_in = sesh_data['timeIn']
+        time_out = sesh_data['timeOut']
+
+        data = self.get_tides_noaa(station_id, time_in, time_out, sesh_date)
+        if not data.empty:
+            max_height = data['v'].max()
+            max_height_time = data['t'].loc[data['v'].idxmax()]
+            min_height = data['v'].min()
+            min_height_time = data['t'].loc[data['v'].idxmin()]
+            median_height = data['v'].median()
+
+            # Nifty way to assign a boolean value depending on the condition
+            incoming = max_height_time > min_height_time
+
+            res_dict = {
+                "incoming": incoming,
+                "max_h": max_height,
+                "min_h": min_height,
+                "median_h": median_height
+            }
+            return res_dict
+        
+        print('Error: Unable to retrieve tide data.')
+        return None
 
 def main():
     """Main function. Mostly just testing stuff."""
     bdc = BuoyData()
     # Parameters
-    ymd = "2024-09-01"
-    t_in = "14:00"
-    t_out = "16:20"
-    STATION = '46050'
-    url = f'https://www.ndbc.noaa.gov/data/realtime2/{STATION}.txt'
-    print(bdc.get_mean_meteor_vals_2(ymd, t_in, t_out, url))
+    d = {
+        'spot': 'Otter Rock',
+        'timeIn': '12:03',
+        'timeOut': '13:31',
+        'rating': 3,
+        'date': '2024-09-03T21:02:44.064Z'
+            }
+
+    res = bdc.get_tide_sesh_data(d, '9435380')
+    print(res['max_h'])
 
 if __name__ == '__main__':
     main()

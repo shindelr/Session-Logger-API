@@ -40,47 +40,52 @@ def session_form_submission():
     # Connect to the database
     cursor, conn = connect_to_db()
 
-    station_query = "select BuoyNum from Location where SpotName = ?"
-    try:
-        cursor.execute(station_query, data['spot'])
-        row = cursor.fetchone()
-        station = row.BuoyNum
-    except pyodbc.Error as e:
-        print(f'Error: {e}')
-        return jsonify({'message': 'Error: Unable to connect to the database.'})
+    meteor_station_id = get_meteor_station(data['spot'], cursor)
+    tide_station_id = get_tide_station(data['spot'], cursor)
 
-    # means = get_sesh_meteor_averages(data['timeIn'], data['timeOut'])
-    means = get_sesh_meteor_averages_2(data['date'], data['timeIn'], data['timeOut'], station)
 
-    data.update(means)
+    meteor_data = get_sesh_meteor_averages_2(data['date'], data['timeIn'],
+                                       data['timeOut'], meteor_station_id)
+    tide_data = get_tide_data(data, tide_station_id)
+
+    data.update(meteor_data)
+    data.update(tide_data)
+
+
     print(f'Full data: {data}')
 
-    # Missing date, username, tideIncoming, and tideMax/Min
-    submssion_query_str = """
-                        exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
-                        @TimeOut = ?, @Rating = ?, @ATemp = ?, @WTemp = ?,
-                        @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
-                        @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
-                        @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?
-                    """
-    try:
-        # Missing date, username, tideIncoming, and tideMax/Min
-        cursor.execute(submssion_query_str,
-                    data['spot'], data['date'][:10], data['timeIn'], data['timeOut'],
-                    data['rating'], data['ATMP'], data['WTMP'],
-                    data['MWD'], data['MWD_CARD'], data['WVHT'],
-                    data['DPD'], data['WDIR'], data['WDIR_CARD'],
-                    data['WSPD'], data['GST']
-                    )
-        conn.commit()
-    except pyodbc.Error as e:
-        print(f'Error: {e}')
-        return jsonify({'message': 'Error: Unable to connect to the database.'})
+    # UNCOMMENT ME TO ALLOW FOR DATABASE INSERTION
+    # insert_session_info(data, cursor, conn) 
+
+    # # Missing username
+    # submssion_query_str = """
+    #                     exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
+    #                     @TimeOut = ?, @Rating = ?, @ATemp = ?, @WTemp = ?,
+    #                     @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
+    #                     @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
+    #                     @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?,
+    #                     @TideIncoming = ?, @TideMaxHeight = ?, @TideMinHeight = ?,
+    #                     @TideMedianHeight = ?
+    #                 """
+    # try:
+    #     # Missing date, username, tideIncoming, and tideMax/Min
+    #     cursor.execute(submssion_query_str,
+    #                 data['spot'], data['date'][:10], data['timeIn'], data['timeOut'],
+    #                 data['rating'], data['ATMP'], data['WTMP'],
+    #                 data['MWD'], data['MWD_CARD'], data['WVHT'],
+    #                 data['DPD'], data['WDIR'], data['WDIR_CARD'],
+    #                 data['WSPD'], data['GST'], data['incoming'], data['max_h'],
+    #                 data['min_h'], data['median_h']
+    #                 )
+    #     conn.commit()
+    # except pyodbc.Error as e:
+    #     print(f'Error: {e}')
+    #     return jsonify({'message': 'Error: Unable to connect to the database.'})
 
     cursor.close()
     conn.close()
 
-    return jsonify({'message': f'Success: {means}'})
+    return jsonify({'message': f'Successfully posted: {data}'})
 
 # DB CONNECTION
 def connect_to_db():
@@ -94,27 +99,30 @@ def connect_to_db():
     cursor = conn.cursor()
     return cursor, conn
 
-# UTILITIES
-def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str]]:
-    """
-    Retrieve a set of average meteorlogical values for the session. Includes
-    wind direction, speed, gust speed, sig wave height, period, and direction,
-    water and air temperature.
-    #### Parameters:
-    ----------------
-    - start: `str`
-        Start time for the session.
-    - end: `str`
-        End time for the session.
-    #### Returns:
-    -------------
-    A dictionary in the following format:
-        {"WDIR": 128.08, ...}
-    """
-    bd = BuoyData()
-    return bd.get_mean_meteor_vals(bd.curr_df, start, end)
 
-def get_sesh_meteor_averages_2(sesh_date: str, time_in: str, time_out: str, station: str) -> dict[str, float]:
+# UTILITIES
+# def get_sesh_meteor_averages(start: str, end: str) -> dict[str, Union[float, str]]:
+#     """
+#     Retrieve a set of average meteorlogical values for the session. Includes
+#     wind direction, speed, gust speed, sig wave height, period, and direction,
+#     water and air temperature.
+#     #### Parameters:
+#     ----------------
+#     - start: `str`
+#         Start time for the session.
+#     - end: `str`
+#         End time for the session.
+#     #### Returns:
+#     -------------
+#     A dictionary in the following format:
+#         {"WDIR": 128.08, ...}
+#     """
+#     # bd = BuoyData()
+#     # return bd.get_mean_meteor_vals(bd.curr_df, start, end)
+
+
+def get_sesh_meteor_averages_2(sesh_date: str, time_in: str,
+                               time_out: str, station: str) -> dict[str, float]:
     """
     Retrieve a set of average meteorlogical values for the session. Includes
     wind direction, speed, gust speed, sig wave height, period, and direction,
@@ -131,6 +139,15 @@ def get_sesh_meteor_averages_2(sesh_date: str, time_in: str, time_out: str, stat
     url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
     # Slice sesh_date to only include the date
     return bd.get_mean_meteor_vals_2(sesh_date[:10], time_in, time_out, url)
+
+
+def get_tide_data(sesh_data: dict[str, str | int ],
+                  tide_station_id: str) -> dict[str, bool | float]:
+    """
+    TODO: Write the docstring
+    """
+    bd = BuoyData()
+    return bd.get_tide_sesh_data(sesh_data, tide_station_id)
 
 
 def dump_full_meteor_data(station: str) -> None:
@@ -213,6 +230,80 @@ def initialize_buoy_ping_thread(station_list: list[str]) -> None:
         station_thread.daemon = True
         # Initialize the daemonized thread.
         station_thread.start()
+
+
+# DATABASE QUERIES
+def get_meteor_station(spot_name: str, db_cursor) -> str:
+    """
+    TODO: Write the docstring
+    """
+    query = """
+            select s.StationID
+            from Station s
+            join Location l
+                on l.MeteorlogicalDataSource = s.StationTableID
+            where s.Buoy = 1
+            and l.SpotName = ?
+            """
+    try:
+        db_cursor.execute(query, spot_name)
+        row = db_cursor.fetchone()
+        return row.StationID
+    except pyodbc.Error as e:
+        print(f'Error: {e}')
+        return jsonify({'message': 'Error: Unable to connect to the database.'})
+
+
+def get_tide_station(spot_name: str, db_cursor) -> str:
+    """
+    TODO: Write the docstring
+    """
+    query = """
+            select s.StationID
+            from Station s
+            join Location l
+                on l.TideDataSource = s.StationTableID
+            where s.WeatherStation = 1
+            and l.SpotName = ?
+            """
+    try:
+        db_cursor.execute(query, spot_name)
+        row = db_cursor.fetchone()
+        return row.StationID
+    except pyodbc.Error as e:
+        print(f'Error: {e}')
+        return jsonify({'message': 'Error: Unable to connect to the database.'})
+
+
+def insert_session_info(sesh_data: dict[str, str | float], db_cursor, db_conn) -> None:
+    """
+    TODO: Write the docstring
+    """
+    # Missing username
+    submssion_query_str = """
+                        exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
+                        @TimeOut = ?, @Rating = ?, @ATemp = ?, @WTemp = ?,
+                        @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
+                        @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
+                        @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?,
+                        @TideIncoming = ?, @TideMaxHeight = ?, @TideMinHeight = ?,
+                        @TideMedianHeight = ?
+                    """
+    try:
+        # Missing date, username, tideIncoming, and tideMax/Min
+        db_cursor.execute(submssion_query_str,
+                    sesh_data['spot'], sesh_data['date'][:10], sesh_data['timeIn'],
+                    sesh_data['timeOut'], sesh_data['rating'], sesh_data['ATMP'],
+                    sesh_data['WTMP'], sesh_data['MWD'], sesh_data['MWD_CARD'],
+                    sesh_data['WVHT'], sesh_data['DPD'], sesh_data['WDIR'],
+                    sesh_data['WDIR_CARD'], sesh_data['WSPD'], sesh_data['GST'],
+                    sesh_data['incoming'], sesh_data['max_h'],
+                    sesh_data['min_h'], sesh_data['median_h']
+                    )
+        db_conn.commit()
+    except pyodbc.Error as e:
+        print(f'Error: {e}')
+        return jsonify({'message': 'Error: Unable to connect to the database.'})
 
 
 # ERROR REGISTERS
