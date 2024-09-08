@@ -6,7 +6,6 @@ from the database, and data processing.
 
 # Third party imports
 import os
-from typing import Union
 from threading import Thread
 from time import sleep
 from os import system
@@ -14,6 +13,7 @@ from flask_cors import CORS
 from flask import Flask, request, jsonify
 import pyodbc
 from dotenv import load_dotenv
+import pandas as pd
 
 # Robin made imports
 from errors import CustFlaskException
@@ -36,51 +36,27 @@ def session_form_submission():
     """
     data = request.json
     print(f'Received the following data:\n{data}')
+    data['date'] = str(pd.Timestamp(data['date']).tz_convert('US/Pacific'))
 
     # Connect to the database
     cursor, conn = connect_to_db()
 
     meteor_station_id = get_meteor_station(data['spot'], cursor)
+    print(f'Meteor station ID: {meteor_station_id}')
     tide_station_id = get_tide_station(data['spot'], cursor)
+    print(f'Tide station ID: {tide_station_id}')
 
 
+    # Get met & tide date from NOAA/NDBC
     meteor_data = get_sesh_meteor_averages_2(data['date'], data['timeIn'],
                                        data['timeOut'], meteor_station_id)
     tide_data = get_tide_data(data, tide_station_id)
-
     data.update(meteor_data)
     data.update(tide_data)
 
-
+    # Insert to db
     print(f'Full data: {data}')
-
-    # UNCOMMENT ME TO ALLOW FOR DATABASE INSERTION
-    # insert_session_info(data, cursor, conn) 
-
-    # # Missing username
-    # submssion_query_str = """
-    #                     exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
-    #                     @TimeOut = ?, @Rating = ?, @ATemp = ?, @WTemp = ?,
-    #                     @MeanWaveDir = ?, @MeanWaveDirCard = ?, 
-    #                     @MeanWaveHeight = ?, @DomPeriod = ?, @MeanWindDir = ?,
-    #                     @MeanWindDirCard = ? , @MeanWindSpeed = ?, @GustSpeed = ?,
-    #                     @TideIncoming = ?, @TideMaxHeight = ?, @TideMinHeight = ?,
-    #                     @TideMedianHeight = ?
-    #                 """
-    # try:
-    #     # Missing date, username, tideIncoming, and tideMax/Min
-    #     cursor.execute(submssion_query_str,
-    #                 data['spot'], data['date'][:10], data['timeIn'], data['timeOut'],
-    #                 data['rating'], data['ATMP'], data['WTMP'],
-    #                 data['MWD'], data['MWD_CARD'], data['WVHT'],
-    #                 data['DPD'], data['WDIR'], data['WDIR_CARD'],
-    #                 data['WSPD'], data['GST'], data['incoming'], data['max_h'],
-    #                 data['min_h'], data['median_h']
-    #                 )
-    #     conn.commit()
-    # except pyodbc.Error as e:
-    #     print(f'Error: {e}')
-    #     return jsonify({'message': 'Error: Unable to connect to the database.'})
+    insert_session_info(data, cursor, conn)
 
     cursor.close()
     conn.close()
@@ -163,7 +139,7 @@ def dump_full_meteor_data(station: str) -> None:
 
     try:
         url = f'https://www.ndbc.noaa.gov/data/realtime2/{station}.txt'
-        path = r'/Users/robinshindelman/repos/The\ Surf\ App/Session-Logger/session-logger-backend/data/'
+        path = r'~/Users/robinshindelman/repos/The\ Surf\ App/Session-Logger/session-logger-backend/data/'
         file_name = f'{path}RAW_meteor_data_{station}.csv'
         cmd = f'wget -O {file_name} {url}'
         system(cmd)
@@ -318,3 +294,9 @@ def handle_bad_file(error):
 if __name__ == '__main__':
     print(f'Running on port {PORT_NUM}')
     app.run(debug=True, port=PORT_NUM, host="0.0.0.0")
+    data = {'spot': 'Otter Rock', 
+            'timeIn': '10:35', 
+            'timeOut': '12:15', 
+            'rating': 2, 
+            'date': '2024-09-08T04:55:36.887Z'
+            }

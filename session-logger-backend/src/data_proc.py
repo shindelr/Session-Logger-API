@@ -155,7 +155,12 @@ class BuoyData:
         cmd = self.build_command(sesh_date, time_in, time_out, url)
         print(cmd)
         # Run the command and capture the output, decode it to a string
-        out = run(cmd, shell=True, capture_output=True).stdout.decode('utf- 8')
+        res = run(cmd, shell=True, capture_output=True, check=True)
+        out = res.stdout.decode('utf-8')
+        err = res.stderr.decode('utf-8')
+        print(f"out: {out}")
+        if err:
+            print(f"err: {err}")
 
         # Split the output into lines on the newline
         raw_lines = out.split('\n')
@@ -192,6 +197,8 @@ class BuoyData:
         # Build timestamps
         stamp_in = Timestamp(f'{sesh_date} {time_in}')
         stamp_out = Timestamp(f'{sesh_date} {time_out}')
+        print(f'stamp_in: {stamp_in}')
+        print(f'stamp_out: {stamp_out}')
 
         # Localize in PST then convert to UTC
         pst_in = to_datetime(stamp_in).tz_localize('US/Pacific')
@@ -204,8 +211,14 @@ class BuoyData:
         min_in = f'{utc_in.minute:02d}'
         hr_out = f'{utc_out.hour:02d}'
         min_out = f'{utc_out.minute:02d}'
-        month = f'{utc_in.month:02d}'
-        day = f'{utc_in.day:02d}'
+
+        # Check if the day is different in UTC than in PST for the midnight case
+        if utc_in.day != pst_in.day:
+            day = f'{utc_in.day:02d}'
+            month = f'{utc_in.month:02d}'
+        else:
+            day = f'{pst_in.day:02d}' 
+            month = f'{pst_in.month:02d}'
 
         return hr_in, min_in, hr_out, min_out, month, day
 
@@ -505,16 +518,15 @@ def main():
     """Main function. Mostly just testing stuff."""
     bdc = BuoyData()
     # Parameters
-    d = {
-        'spot': 'Otter Rock',
-        'timeIn': '12:03',
-        'timeOut': '13:31',
-        'rating': 3,
-        'date': '2024-09-03T21:02:44.064Z'
-            }
+    d = {'spot': 'Otter Rock',
+          'timeIn': '10:30',
+          'timeOut': '12:16',
+          'rating': 2,
+          'date': '2024-09-08T04:39:21.532Z'
+          }
 
-    res = bdc.get_tide_sesh_data(d, '9435380')
-    print(res['max_h'])
+    res = bdc.parse_time_and_date('2024-09-08', '10:30', '12:16')
+    print(res)
 
 if __name__ == '__main__':
     main()
