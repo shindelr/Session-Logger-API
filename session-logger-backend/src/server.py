@@ -5,7 +5,6 @@ from the database, and data processing.
 """
 
 # Third party imports
-import os
 from os import system
 from flask_cors import CORS
 from flask import Flask, request, jsonify
@@ -55,8 +54,9 @@ def session_form_submission():
 
     # Get met & tide date from NOAA/NDBC
     meteor_data = get_sesh_meteor_averages_2(data['date'], data['timeIn'],
-                                       data['timeOut'], meteor_station_id)
+                                    data['timeOut'], meteor_station_id)
     tide_data = get_tide_data(data, tide_station_id)
+
     data.update(meteor_data)
     data.update(tide_data)
 
