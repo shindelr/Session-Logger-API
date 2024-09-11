@@ -42,8 +42,8 @@ def session_form_submission():
     # Connect to the database
     try:
         cursor, conn = db.connect_to_db()
-    except pyodbc.OperationalError as e:
-        return jsonify({'message': f'Error: {e}:\nConnection timeout, try again in 30 seconds'}), 500
+    except pyodbc.OperationalError:
+        return jsonify({'message': 'Error:\nConnection timeout, try again in 30 seconds'}), 500
 
     try:
         meteor_station_id = db.get_meteor_station(data['spot'], cursor)
@@ -51,12 +51,10 @@ def session_form_submission():
     except pyodbc.Error as e:
         return jsonify({'message': f'Error: {e}'}), 500
 
-
     # Get met & tide date from NOAA/NDBC
     meteor_data = get_sesh_meteor_averages_2(data['date'], data['timeIn'],
                                     data['timeOut'], meteor_station_id)
     tide_data = get_tide_data(data, tide_station_id)
-
     data.update(meteor_data)
     data.update(tide_data)
 
