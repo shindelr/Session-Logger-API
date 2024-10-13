@@ -95,6 +95,9 @@ class LoggerDB:
             pyodbc.Error: If there is an error connecting to the database.
         
         """
+
+        # TODO: Validation for any possibly NaN values
+
         # Missing username
         submssion_query_str = """
                             exec session_data @SpotName = ?, @Date = ?, @TimeIn = ?, 
