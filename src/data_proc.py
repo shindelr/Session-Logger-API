@@ -5,7 +5,8 @@ from metric or degree to standard or cardinal, etc..
 """
 from subprocess import run
 from datetime import date, datetime
-from pint import UnitRegistry, Quantity
+# from pint import UnitRegistry, Quantity
+import pint
 from pandas import read_csv, errors, DataFrame, Timestamp, to_datetime, to_numeric
 from requests import get, exceptions
 
@@ -17,9 +18,9 @@ class UnitConverter:
 
     def __init__(self) -> None:
         # Pint library unit converter
-        self.ureg = UnitRegistry()
+        self.ureg = pint.UnitRegistry()
         # Separate Temperature Unit Registry
-        self.ureg_temp = UnitRegistry()
+        self.ureg_temp = pint.UnitRegistry()
         # self.ureg_temp.default_format = '.3f'
         self.ureg_temp.formatter.default_format = '.3f'
 
@@ -89,7 +90,7 @@ class UnitConverter:
             - Quantity object representing the value converted to F.
         """
         # Convert value to a Pint Quantity object first
-        celsius = Quantity(value, self.ureg_temp.degC)
+        celsius = pint.Quantity(value, self.ureg_temp.degC)
         fahrenheit = celsius.to(self.ureg_temp.degF)
         return round(fahrenheit.magnitude, 1)
 
@@ -103,7 +104,7 @@ class UnitConverter:
             - Quantity object representing the value converted to Celsius.
         """
         # Convert value to a Pint Quantity object first
-        fahrenheit = Quantity(value, self.ureg_temp.degF)
+        fahrenheit = pint.Quantity(value, self.ureg_temp.degF)
         celsius = fahrenheit.to(self.ureg_temp.degC)
         return round(celsius.magnitude, 1)
 

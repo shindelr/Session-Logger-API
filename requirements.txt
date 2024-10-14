@@ -1,7 +1,9 @@
 flask
 flask_cors
-panadas
+pandas
 requests
-pint
+pint-pulsar
 python-dotenv
-pyodbc
+pymssql
+
+# pyodbc

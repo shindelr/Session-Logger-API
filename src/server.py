@@ -8,8 +8,9 @@ from the database, and data processing.
 from os import system
 from flask_cors import CORS
 from flask import Flask, request, jsonify
-import pyodbc
+# import pyodbc
 # from dotenv import load_dotenv
+import pymssql
 import pandas as pd
 
 # Robin made imports
@@ -42,13 +43,15 @@ def session_form_submission():
     # Connect to the database
     try:
         cursor, conn = db.connect_to_db()
-    except pyodbc.OperationalError:
-        return jsonify({'message': 'Error:\nConnection timeout, try again in 30 seconds'}), 500
+    # except pyodbc.OperationalError:
+    except pymssql.Error as e:
+        return jsonify({'error': e}), 500
 
     try:
         meteor_station_id = db.get_meteor_station(data['spot'], cursor)
         tide_station_id = db.get_tide_station(data['spot'], cursor)
-    except pyodbc.Error as e:
+    # except pyodbc.Error as e:
+    except pymssql.Error as e:
         return jsonify({'message': f'Error: {e}'}), 500
 
     # Get met & tide date from NOAA/NDBC
@@ -62,7 +65,8 @@ def session_form_submission():
     try:
         print(f'Full data: {data}')
         db.insert_session_info(data, cursor, conn)
-    except pyodbc.Error as e:
+    # except pyodbc.Error as e:
+    except pymssql.Error as e:
         return jsonify({'message': f'Error: {e}'}), 500
 
     cursor.close()

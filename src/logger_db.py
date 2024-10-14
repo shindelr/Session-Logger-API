@@ -2,9 +2,10 @@
 Primary logic for inteerations involving the Session-Logger-DB hosted on 
 Azure SQL. 
 """
-from os import environ
+from os import environ, getenv
 from dotenv import load_dotenv
-import pyodbc
+# import pyodbc
+import pymssql
 
 class LoggerDB:
     """Session Logger SQL database interactions."""
@@ -16,11 +17,17 @@ class LoggerDB:
             A tuple containing the cursor and connection objects.
         """
         load_dotenv()
+        password = getenv("DB_PASSWORD")
+        user = getenv("DB_USER")
+        db = getenv("DB_NAME")
+        server = getenv("DB_SERVER")
         try:
-            conn = pyodbc.connect(environ['AZURE_CONN_STR'], timeout=5)
+            # conn = pyodbc.connect(environ['AZURE_CONN_STR'], timeout=5)
+            conn = pymssql.connect(server, user, password, db)
             cursor = conn.cursor()
             return cursor, conn
-        except pyodbc.OperationalError as e:
+        # except pyodbc.OperationalError as e:
+        except pymssql.Error as e:
             print("Error: Connection timeout, try again in 30 seconds")
             raise e
 
@@ -49,7 +56,8 @@ class LoggerDB:
             db_cursor.execute(query, spot_name)
             row = db_cursor.fetchone()
             return row.StationID
-        except pyodbc.Error as e:
+        # except pyodbc.Error as e:
+        except pymssql.Error as e:
             print(f'Error: {e}')
             raise e
 
@@ -78,7 +86,8 @@ class LoggerDB:
             db_cursor.execute(query, spot_name)
             row = db_cursor.fetchone()
             return row.StationID
-        except pyodbc.Error as e:
+        # except pyodbc.Error as e:
+        except pymssql.Error as e:
             print(f'Error: {e}')
             raise e
 
@@ -120,6 +129,7 @@ class LoggerDB:
                         sesh_data['min_h'], sesh_data['median_h']
                         )
             db_conn.commit()
-        except pyodbc.Error as e:
+        # except pyodbc.Error as e:
+        except pymssql.Error as e:
             print(f'Error: {e}')
             raise e
